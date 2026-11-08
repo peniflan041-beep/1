@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seaside Palace — 3D Scene</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #89bde8; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .label { position: fixed; left: 24px; top: 20px; color: #fff8e9; text-shadow: 0 2px 12px #294359; pointer-events: none; }
+    .label h1 { margin: 0; font-size: clamp(18px, 2.2vw, 28px); letter-spacing: .08em; text-transform: uppercase; }
+    .label p { margin: 6px 0 0; font-size: 12px; opacity: .9; letter-spacing: .12em; }
+    .hint { position: fixed; right: 20px; bottom: 16px; color: #fff; font-size: 12px; opacity: .85; text-shadow: 0 1px 5px #254356; }
+    #error { position: fixed; inset: auto 16px 48px; color: #fff; text-align: center; display: none; }
+  </style>
+</head>
+<body>
+  <div class="label"><h1>Azure Palace</h1><p>COASTAL HOTEL · 3D STUDY</p></div>
+  <div class="hint">Drag to orbit · Scroll to zoom</div>
+  <div id="error">The 3D scene could not load. Check your internet connection and reload.</div>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x9bc8ef);
+    scene.fog = new THREE.Fog(0x9bc8ef, 75, 180);
+    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 260);
+    camera.position.set(39, 25, 50);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 7, 0);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI * .48;
+    controls.minDistance = 25;
+    controls.maxDistance = 100;
+
+    scene.add(new THREE.HemisphereLight(0xd8efff, 0x826446, 2.1));
+    const sun = new THREE.DirectionalLight(0xffe1ad, 3.2);
+    sun.position.set(-28, 38, 24); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -48; sun.shadow.camera.right = 48;
+    sun.shadow.camera.top = 48; sun.shadow.camera.bottom = -35;
+    sun.shadow.bias = -0.0003;
+    scene.add(sun);
+
+    const cream = new THREE.MeshStandardMaterial({ color: 0xf3d7b8, roughness: .8 });
+    const pale = new THREE.MeshStandardMaterial({ color: 0xffe9cf, roughness: .72 });
+    const blush = new THREE.MeshStandardMaterial({ color: 0xd99e91, roughness: .8 });
+    const teal = new THREE.MeshStandardMaterial({ color: 0x69c4c5, roughness: .32, metalness: .12 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x247c9b, roughness: .2, metalness: .28, transparent: true, opacity: .92 });
+    const darkGlass = new THREE.MeshStandardMaterial({ color: 0x245b68, roughness: .24, metalness: .16 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd5a45f, metalness: .62, roughness: .3 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x81533a, roughness: .8 });
+    const green = new THREE.MeshStandardMaterial({ color: 0x286b4b, roughness: .9 });
+    const sandMat = new THREE.MeshStandardMaterial({ color: 0xe9c99c, roughness: 1 });
+
+    function box(w,h,d,mat,x,y,z, parent=scene) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+      m.position.set(x,y,z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+    }
+    function cylinder(rt,rb,h,mat,x,y,z,seg=16,parent=scene) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; parent.add(m); return m;
+    }
+    function sphere(r,mat,x,y,z,sx=1,sy=1,sz=1,parent=scene) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r,24,16),mat);
+      m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=true; m.receiveShadow=true; parent.add(m); return m;
+    }
+    function line(points, mat, radius=.055, parent=scene) {
+      const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+      const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, radius, 6, false), mat);
+      mesh.castShadow = true; parent.add(mesh); return mesh;
+    }
+    function arch(x,y,z,width,height,mat,r=.11) {
+      // A slender decorative arch, open at the bottom.
+      const pts = [[x-width/2,y,z],[x-width/2,y+height*.48,z]];
+      for(let i=0;i<=16;i++) {
+        const a = Math.PI - (Math.PI*i/16);
+        pts.push([x+Math.cos(a)*width/2,y+height*.48+Math.sin(a)*height*.52,z]);
+      }
+      pts.push([x+width/2,y,z]); line(pts,mat,r);
+    }
+    function column(x,y,z,h,rad=.24) {
+      cylinder(rad*.78,rad,h,pale,x,y+h/2,z,16);
+      cylinder(rad*1.35,rad*1.35,.18,pale,x,y+.12,z,16);
+      cylinder(rad*1.6,rad*1.6,.2,pale,x,y+h-.12,z,16);
+      sphere(rad*1.2,pale,x,y+h-.34,z,1,.65,1);
+    }
+    function dome(x,z,rise,radius,mat) {
+      const base = 13.8;
+      cylinder(radius*.94,radius,.35,pale,x,base,z,32);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(radius,32,20,0,Math.PI*2,0,Math.PI/2),mat);
+      cap.position.set(x,base+.14,z); cap.scale.y = rise/radius; cap.castShadow=true; cap.receiveShadow=true; scene.add(cap);
+      // Gold ribs follow the curved dome surface.
+      for(let i=0;i<12;i++) {
+        const a=i*Math.PI/6;
+        const pts=[];
+        for(let j=0;j<=12;j++) {
+          const t=(Math.PI/2)*(j/12), rr=radius*Math.cos(t);
+          pts.push([x+Math.cos(a)*rr,base+.16+rise*Math.sin(t),z+Math.sin(a)*rr]);
+        }
+        line(pts,gold,.035);
+      }
+      sphere(.2,gold,x,base+rise+.12,z,1,1.5,1);
+      cylinder(.065,.065,.75,gold,x,base+rise+.48,z,10);
+      sphere(.18,gold,x,base+rise+.9,z,1,1.25,1);
+    }
+
+    // Shore, promenade and water.
+    box(220,.35,115,sandMat,0,-.35,-39);
+    const promenade = new THREE.Mesh(new THREE.PlaneGeometry(120,14), new THREE.MeshStandardMaterial({color:0xd9c8ac,roughness:.92}));
+    promenade.rotation.x=-Math.PI/2; promenade.position.set(0,.01,18); promenade.receiveShadow=true; scene.add(promenade);
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(220,75,90,35), new THREE.MeshStandardMaterial({color:0x1688a2,roughness:.27,metalness:.18, side:THREE.DoubleSide}));
+    sea.rotation.x=-Math.PI/2; sea.position.set(0,-.12,53); sea.receiveShadow=true; scene.add(sea);
+    // Break the shore into softly rippled turquoise bands.
+    for(let i=0;i<8;i++) {
+      const wave = new THREE.Mesh(new THREE.TorusGeometry(42+i*2.8,.07,5,100), new THREE.MeshBasicMaterial({color:i%2?0x8dd6d6:0xd5f3e8,transparent:true,opacity:.48}));
+      wave.rotation.x=Math.PI/2; wave.scale.set(1,.22,1); wave.position.set(0,.03,47+i*1.7); scene.add(wave);
+    }
+
+    // Main hotel massing: central pavilion and stepped side wings.
+    box(20,13.2,12,cream,0,6.6,0);
+    box(13,11.3,11,cream,-16,5.65,0);
+    box(13,11.3,11,cream,16,5.65,0);
+    box(8.5,8.3,10,cream,-25.5,4.15,0);
+    box(8.5,8.3,10,cream,25.5,4.15,0);
+    // Roof terraces and cornices.
+    for (const [x,w,y] of [[0,20,13.15],[-16,13,11.2],[16,13,11.2],[-25.5,8.5,8.2],[25.5,8.5,8.2]]) {
+      box(w+.55,.4,12,pale,x,y,0);
+      box(w+.4,.2,12.3,gold,x,y+.28,0);
+    }
+    // Central crown and tall fin-like ornaments.
+    box(12,.65,10,pale,0,13.65,0);
+    for (const x of [-6.6,-5.7,5.7,6.6]) {
+      const fin=box(.52,8.2,.72,pale,x,17.4,-.2); fin.rotation.z=(x<0?-.045:.045);
+      sphere(.22,gold,x,21.55,-.2,1,1.4,1);
+    }
+    dome(0,-.45,7.3,5.25,teal);
+    dome(-16,-.5,4.1,3.35,glass);
+    dome(16,-.5,3.6,3.0,glass);
+
+    // Repeated windows, French doors, balconies and ornate arch surrounds.
+    const frontZ=6.08;
+    const floors=[1.0,5.05,9.0];
+    const bays=[-25.5,-21,-16,-11,-6,0,6,11,16,21,25.5];
+    for (const x of bays) {
+      const width=(Math.abs(x)>23?2.45:3.1);
+      for (let fi=0;fi<floors.length;fi++) {
+        const y=floors[fi];
+        if (Math.abs(x)>23 && fi===2) continue;
+        box(width,2.55,.18,darkGlass,x,y+1.35,frontZ);
+        box(.12,2.65,.22,pale,x-width/2-.08,y+1.32,frontZ+.02);
+        box(.12,2.65,.22,pale,x+width/2+.08,y+1.32,frontZ+.02);
+        box(.1,2.5,.24,gold,x,y+1.35,frontZ+.15);
+        box(width+.32,.16,.55,pale,x,y,frontZ+.18);
+        arch(x,y,frontZ+.12,width+.22,3.15,blush,.11);
+        // Small balcony slab, balusters and handrail.
+        box(width+.7,.22,1.1,pale,x,y+.02,frontZ+.55);
+        for(let k=0;k<7;k++) {
+          const bx=x-width*.43+k*(width*.86/6);
+          cylinder(.035,.035,.68,pale,bx,y+.47,frontZ+1.02,8);
+        }
+        line([[x-width*.52,y+.78,frontZ+1.02],[x,y+.82,frontZ+1.02],[x+width*.52,y+.78,frontZ+1.02]],gold,.055);
+        sphere(.13,blush,x,y+3.45,frontZ+.2,1,.55,.3);
+      }
+    }
+    // Decorative vertical pilasters and shell/fan-shaped reliefs.
+    for(const x of [-29,-23,-18,-13,-8,-4,4,8,13,18,23,29]) {
+      if(Math.abs(x)>27) continue;
+      box(.2,12,.32,pale,x,6.2,frontZ+.28);
+      sphere(.7,blush,x,3.2,frontZ+.42,1,.24,.18);
+      for(let j=-2;j<=2;j++) line([[x,3.2,frontZ+.53],[x+j*.22,3.8,frontZ+.53]],pale,.035);
+    }
+    // Ground-floor arcades and warmly glowing restaurant frontage.
+    const warmGlass = new THREE.MeshStandardMaterial({color:0x70452f,emissive:0xc67836,emissiveIntensity:.42,roughness:.35,metalness:.08});
+    for(let x=-27;x<=27;x+=4.5) {
+      box(3.35,3.6,.16,warmGlass,x,1.85,frontZ+.05);
+      arch(x,.05,frontZ+.25,3.65,4.0,pale,.18);
+      column(x-1.82,.05,frontZ+.42,3.6,.22);
+      column(x+1.82,.05,frontZ+.42,3.6,.22);
+    }
+    // Balustrades at the long terrace edges.
+    for(const y of [4.15,8.2,12.15]) {
+      for(const [a,b] of [[-29,-7],[7,29]]) {
+        line([[a,y,frontZ+1.2],[b,y,frontZ+1.2]],pale,.12);
+        for(let x=a;x<=b;x+=.55) cylinder(.035,.035,.72,pale,x,y-.38,frontZ+1.2,8);
+        line([[a,y-.72,frontZ+1.2],[b,y-.72,frontZ+1.2]],gold,.04);
+      }
+    }
+    // Side wings have repeated windows on their outer-facing elevations.
+    for(const side of [-1,1]) for(let z=-3.7;z<=3.8;z+=3.5) for(const y of [1.5,5.5,9.1]) {
+      box(.12,2.25,1.75,teal,side*29.82,y,z);
+      box(.15,2.4,.12,pale,side*29.9,y,z-.95);
+      box(.15,2.4,.12,pale,side*29.9,y,z+.95);
+    }
+
+    // Planters and small ornamental trees along the facade.
+    function planter(x,z) {
+      const pot=new THREE.Mesh(new THREE.CylinderGeometry(.55,.42,.72,12),pale);
+      pot.position.set(x,.36,z); pot.castShadow=true; pot.receiveShadow=true; scene.add(pot);
+      cylinder(.12,.17,1.3,wood,x,1.25,z,9);
+      for(let i=0;i<7;i++) sphere(.52,green,x+Math.sin(i*2.4)*.5,1.85+(i%3)*.25,z+Math.cos(i*2.4)*.5,.9,1.1,.9);
+    }
+    for(const x of [-28,-22,-17,-12,-7,7,12,17,22,28]) planter(x,8.2);
+
+    // Palm trees with tapered trunks and curved leaf fronds.
+    function palm(x,z,height=9) {
+      let px=x, py=.15, pz=z;
+      for(let i=0;i<8;i++) {
+        const ny=py+height/8, nx=x+Math.sin(i/8*.7)*.36;
+        const seg=new THREE.Mesh(new THREE.CylinderGeometry(.12-i*.008,.22-i*.01,height/8,8),wood);
+        seg.position.set((px+nx)/2,(py+ny)/2,pz); seg.castShadow=true; scene.add(seg); px=nx; py=ny;
+      }
+      sphere(.24,green,px,py,pz,1,1,1);
+      for(let i=0;i<9;i++) {
+        const a=i*Math.PI*2/9, len=3.1+(i%3)*.25;
+        const endX=px+Math.cos(a)*len, endZ=pz+Math.sin(a)*len;
+        const midX=px+Math.cos(a)*len*.5, midZ=pz+Math.sin(a)*len*.5;
+        line([[px,py,pz],[midX,py+.65,midZ],[endX,py-.05,endZ]],green,.075);
+        for(let k=1;k<=5;k++) {
+          const t=k/6, fx=px+Math.cos(a)*len*t, fz=pz+Math.sin(a)*len*t, fy=py+.55*Math.sin(Math.PI*t);
+          for(const s of [-1,1]) line([[fx,fy,fz],[fx+Math.cos(a+s*.8)*.65,fy-.35,fz+Math.sin(a+s*.8)*.65]],green,.026);
+        }
+      }
+    }
+    palm(-35,3,11); palm(35,1,12); palm(-31,12,9); palm(31,11,10);
+    palm(-12,10,7); palm(13,10,7); palm(-39,-5,9); palm(39,-7,10);
+
+    // Café terrace tables, umbrellas, chairs and strolling guests.
+    const tableMat=new THREE.MeshStandardMaterial({color:0xefe3d0,roughness:.8});
+    function table(x,z) {
+      cylinder(.72,.72,.12,tableMat,x,.95,z,20);
+      cylinder(.09,.12,.92,gold,x,.48,z,10);
+      for(const dx of [-.65,.65]) for(const dz of [-.48,.48]) {
+        box(.42,.08,.42,wood,x+dx,.48,z+dz);
+        box(.08,.55,.08,wood,x+dx,.23,z+dz);
+      }
+    }
+    function umbrella(x,z) {
+      cylinder(.055,.055,3.2,wood,x,1.7,z,10);
+      const canopy=new THREE.Mesh(new THREE.ConeGeometry(2.15,.85,12),new THREE.MeshStandardMaterial({color:0xffe6c6,roughness:.95,side:THREE.DoubleSide}));
+      canopy.position.set(x,3.25,z); canopy.castShadow=true; scene.add(canopy);
+    }
+    for(const x of [-25,-19,-13,-7,7,13,19,25]) {
+      table(x,13.3); table(x+1.5,15.2);
+      if(Math.abs(x)%2===1 || x<0) umbrella(x,13.3);
+    }
+    const personMats=[new THREE.MeshStandardMaterial({color:0x415c77}),new THREE.MeshStandardMaterial({color:0xd27d53}),new THREE.MeshStandardMaterial({color:0xf5eee1}),new THREE.MeshStandardMaterial({color:0x627b54})];
+    function person(x,z,scale=1,idx=0) {
+      const mat=personMats[idx%personMats.length];
+      cylinder(.17*scale,.21*scale,1.05*scale,mat,x,.72*scale,z,8);
+      sphere(.17*scale, new THREE.MeshStandardMaterial({color:0xd5a47f}),x,1.36*scale,z,1,1,1);
+      for(const dx of [-.12,.12]) {
+        const leg=new THREE.Mesh(new THREE.CylinderGeometry(.045*scale,.06*scale,.62*scale,6),darkGlass);
+        leg.position.set(x+dx*scale,.2*scale,z); leg.castShadow=true; scene.add(leg);
+      }
+    }
+    for(let i=0;i<20;i++) person(-28+i*2.9,18+(i%3)*.7,.85+(i%3)*.08,i);
+    for(let i=0;i<12;i++) person(-25+i*4.5,7.4,.9+(i%2)*.1,i+1);
+
+    // Neighboring apartment blocks, kept low contrast in the background.
+    const neighbor=new THREE.MeshStandardMaterial({color:0xe9d9c6,roughness:.9});
+    function apartment(x,z,w,h,d) {
+      box(w,h,d,neighbor,x,h/2,z);
+      for(let yy=2;yy<h-1;yy+=2.5) for(let xx=-w/2+1.1;xx<w/2;xx+=2.5) {
+        box(.95,1.25,.12,teal,x+xx,yy,z+d/2+.08);
+        box(1.05,.08,.16,pale,x+xx,yy-.68,z+d/2+.1);
+      }
+      box(w+.3,.3,d+.3,pale,x,h,z);
+    }
+    apartment(-43,-3,15,14,12); apartment(43,-5,17,15,12);
+    apartment(-39,-22,13,12,12); apartment(41,-24,14,13,12);
+
+    // Small golden lights under the arcade create a welcoming evening glow.
+    for(let x=-25;x<=25;x+=5) {
+      const light=new THREE.PointLight(0xffbd67,1.1,7,2);
+      light.position.set(x,3.35,7.5); scene.add(light);
+      sphere(.12,new THREE.MeshBasicMaterial({color:0xffd28b}),x,3.25,7.28,1,1,1);
+    }
+
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(220,150),new THREE.MeshStandardMaterial({color:0xd8bd96,roughness:1}));
+    ground.rotation.x=-Math.PI/2; ground.position.set(0,-.55,-15); ground.receiveShadow=true; scene.add(ground);
+
+    addEventListener('resize',()=>{
+      camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight);
+    });
+    function animate(t) {
+      requestAnimationFrame(animate);
+      sea.position.y=-.12+Math.sin(t*.0006)*.035;
+      controls.update(); renderer.render(scene,camera);
+    }
+    animate(0);
+  </script>
+</body>
+</html>
